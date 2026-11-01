@@ -18,6 +18,8 @@ include_directories(
 add_executable(legionaura-gui
     main.cpp
     MainWindow.cpp
+    MusicSync.cpp
+    MusicSync.h
     ScreenSync.cpp
     ScreenSync.h
     ScreenColors.h
