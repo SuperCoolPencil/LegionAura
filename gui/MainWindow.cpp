@@ -132,6 +132,11 @@ MainWindow::MainWindow(QWidget *parent)
     m_effectGroup->addButton(ui->btnEffectHue, 3);
     m_effectGroup->addButton(ui->btnEffectOff, 4);
     m_effectGroup->addButton(ui->btnEffectScreen, 5);
+    m_effectGroup->addButton(ui->btnEffectMusic, 6);
+    connect(&m_musicSync, &MusicSync::colorsChanged, this, [this] {
+        for (int i = 0; i < 4; ++i) ui->keyboardPreviewWidget->setZoneColor(i, m_musicSync.colors()[i]);
+    });
+    connect(&m_musicSync, &MusicSync::failed, this, &MainWindow::setStatusErr);
     connect(&m_screenSync, &ScreenSync::colorsChanged, this, [this] {
         const auto colors = m_screenSync.colors();
         for (int i = 0; i < 4; ++i)
@@ -155,6 +160,9 @@ MainWindow::MainWindow(QWidget *parent)
     connect(ui->btnModeAccent, &QPushButton::clicked, this, &MainWindow::onAccentModeDesktop);
     connect(ui->btnAccentRefresh, &QPushButton::clicked, this, &MainWindow::onAccentRefresh);
 
+    for (auto *edit : {ui->editZ1, ui->editZ2, ui->editZ3, ui->editZ4})
+        edit->setText("8A2BE2");
+    ui->sliderBrightness->setValue(ui->sliderBrightness->maximum());
     ui->btnEffectStatic->setChecked(true);
     onEffectChanged(0);
     onSliderChanged();
@@ -170,6 +178,7 @@ MainWindow::MainWindow(QWidget *parent)
 MainWindow::~MainWindow()
 {
     m_screenSync.stop();
+    m_musicSync.stop();
     delete ui;
 }
 
@@ -179,6 +188,7 @@ MainWindow::~MainWindow()
 void MainWindow::onDetectClicked()
 {
     m_screenSync.stop();
+    m_musicSync.stop();
     if (kb_.autoDetect()) {
         deviceReady_ = true;
         setDeviceStatusText(ui, resolveDeviceName(kb_.getPid()), true);
@@ -203,6 +213,7 @@ void MainWindow::onDetectClicked()
 void MainWindow::autoDetectOnStartup()
 {
     m_screenSync.stop();
+    m_musicSync.stop();
     if (kb_.autoDetect()) {
         deviceReady_ = true;
         setDeviceStatusText(ui, resolveDeviceName(kb_.getPid()), true);
@@ -337,6 +348,7 @@ void MainWindow::onPickZ4()
 void MainWindow::onSliderChanged()
 {
     m_screenSync.setBrightness(ui->sliderBrightness->value());
+    m_musicSync.setBrightness(ui->sliderBrightness->value());
     ui->lblSpeedVal->setText(QString::number(ui->sliderSpeed->value()));
     ui->lblBrightVal->setText(QString::number(ui->sliderBrightness->value()));
 }
@@ -347,7 +359,16 @@ void MainWindow::onSliderChanged()
 void MainWindow::onEffectChanged(int idx)
 {
     m_screenSync.stop();
-    ui->sliderSpeed->setEnabled(idx != 5);
+    m_musicSync.stop();
+    if (idx == 6 && ui->editZ1->text() == "8A2BE2" &&
+        ui->editZ2->text() == "8A2BE2" && ui->editZ3->text() == "8A2BE2" &&
+        ui->editZ4->text() == "8A2BE2") {
+        ui->editZ1->setText("8A2BE2");
+        ui->editZ2->setText("B52BE2");
+        ui->editZ3->setText("E22BAE");
+        ui->editZ4->setText("FF507C");
+    }
+    ui->sliderSpeed->setEnabled(idx != 5 && idx != 6);
     QString mode;
     switch (idx) {
         case 0: mode = "static"; break;
@@ -356,17 +377,18 @@ void MainWindow::onEffectChanged(int idx)
         case 3: mode = "hue"; break;
         case 4: mode = "off"; break;
         case 5: mode = "screen"; break;
+        case 6: mode = "music"; break;
         default: mode = "static"; break;
     }
 
-    bool needsColors = (mode == "static" || mode == "breath");
+    bool needsColors = (mode == "static" || mode == "breath" || mode == "music");
     bool needsDir    = (mode == "wave");
 
     // Show the accent toggle for both Static and Breath modes
-    ui->btnModeCustom->setVisible(needsColors);
-    ui->btnModeAccent->setVisible(needsColors);
+    ui->btnModeCustom->setVisible(needsColors && mode != "music");
+    ui->btnModeAccent->setVisible(needsColors && mode != "music");
     
-    if (!needsColors && m_desktopAccentMode) {
+    if ((!needsColors || mode == "music") && m_desktopAccentMode) {
         onAccentModeCustom();
     }
 
@@ -400,9 +422,10 @@ void MainWindow::updatePreview()
         case 3: mode = "hue"; break;
         case 4: mode = "off"; break;
         case 5: mode = "screen"; break;
+        case 6: mode = "music"; break;
         default: mode = "static"; break;
     }
-    bool needsColors = (mode == "static" || mode == "breath");
+    bool needsColors = (mode == "static" || mode == "breath" || mode == "music");
     if (mode == "screen") return;
 
     if (!needsColors) {
@@ -484,6 +507,7 @@ std::optional<LAParams> MainWindow::buildParamsFromUi() const
         case 3: mode = "hue"; break;
         case 4: mode = "off"; break;
         case 5: mode = "screen"; break;
+        case 6: mode = "music"; break;
         default: mode = "static"; break;
     }
 
@@ -492,7 +516,7 @@ std::optional<LAParams> MainWindow::buildParamsFromUi() const
     p.brightness = ui->sliderBrightness->value();
     p.waveDir    = LAWaveDir::None;
 
-    if (mode == "static")      p.effect = LAEffect::Static;
+    if (mode == "static" || mode == "music") p.effect = LAEffect::Static;
     else if (mode == "breath") p.effect = LAEffect::Breath;
     else if (mode == "wave")   p.effect = LAEffect::Wave;
     else if (mode == "hue")    p.effect = LAEffect::Hue;
@@ -566,12 +590,20 @@ void MainWindow::onApplyClicked()
         return;
     }
 
+    if (idx == 6) {
+        auto params = buildParamsFromUi();
+        if (!params) { setStatusErr("Invalid zone colors for Music Sync."); return; }
+        m_screenSync.stop();
+        m_musicSync.start(ui->sliderBrightness->value(), params->zones);
+        return;
+    }
     if (idx == 5) {
         setStatusOk("Screen Sync: choose a screen if prompted. Keep the app open to sync.");
         m_screenSync.start(ui->sliderBrightness->value());
         return;
     }
     m_screenSync.stop();
+    m_musicSync.stop();
     auto params = buildParamsFromUi();
     if (!params) {
         setStatusErr("Invalid color values or no accent detected.");
@@ -593,6 +625,7 @@ void MainWindow::onApplyClicked()
 void MainWindow::onOffClicked()
 {
     m_screenSync.stop();
+    m_musicSync.stop();
     if (!deviceReady_) {
         setStatusErr("Device not connected.");
         return;

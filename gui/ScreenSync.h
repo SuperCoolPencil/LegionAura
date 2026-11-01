@@ -38,7 +38,7 @@ private:
     bool m_framePosted = false, m_acceptFrames = false;
     quint64 m_frameGeneration = 0;
     bool m_running = false, m_haveFrame = false;
-    int m_brightness = 1;
+    int m_brightness = 2;
     quint64 m_generation = 0;
     std::thread m_writer;
     std::mutex m_mutex;

@@ -13,6 +13,7 @@ LegionAura communicates with the built-in 4-zone ITE RGB keyboard controller via
 ## Features
 
 - **Dual Interface:** Comes with both a command-line utility (`legionaura`) and a clean graphical interface (`legionaura-gui`).
+- **Music Sync:** Pulse all four keyboard zones to the beat of system audio.
 - **Screen Sync:** Smoothly mirror four screen regions onto the four keyboard zones while the GUI is running.
 - **Hardware-Level Control:** Interfaces directly with the ITE controller using `hidapi`.
 - **Lightweight:** Built natively in C++ and Qt6 for near-zero memory footprint.
@@ -89,6 +90,14 @@ Select **Screen Sync** and press **Apply**. On Wayland, choose a monitor in the 
 Screen Sync needs the GUI running (minimized is fine). Switching effects, pressing Off, reconnecting, or closing the app stops capture. Closing leaves the last applied colors on the keyboard. Screen Sync does not replace your saved lighting profile or automatically request capture at login. Frames are processed in memory and are not saved.
 
 Wayland requires a working PipeWire service and an XDG Desktop Portal backend with ScreenCast support for your desktop (for example, `xdg-desktop-portal-gnome` on GNOME). Qt Multimedia must have its FFmpeg backend available. If screen sharing is denied or stopped, or a keyboard write fails, the status bar reports it; press Apply to retry after resolving the problem.
+
+The GUI defaults to maximum hardware brightness. Reactive effects process incoming screen frames or audio immediately, retaining only the newest pending USB update rather than imposing a display FPS cap.
+
+### Music Sync
+
+Select **Music Sync**, choose up to four zone colors, and press **Apply**. The four zones react independently to bass, low mids, upper mids, and treble, with fast attacks and smooth fades. The initial music palette runs from violet to pink. The brightness slider remains available. The GUI must remain running; switching effects, pressing Off, reconnecting, or closing it stops capture. Music Sync does not overwrite the saved lighting profile.
+
+Music Sync captures the default output's monitor through `pactl` and `parec`. Install the PulseAudio utilities package (often `pulseaudio-utils` or `pulseaudio`) and run PulseAudio or PipeWire's PulseAudio compatibility service. The output device is selected when Apply is pressed; press Apply again after changing the default output. Audio is processed locally and not saved. If capture or a keyboard write fails, the status bar reports the error.
 
 ### GNOME Wayland fullscreen capture
 
