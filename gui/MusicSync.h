@@ -25,7 +25,6 @@ signals:
     void colorsChanged();
     void failed(const QString &message);
     void started();
-    void beatRateChanged(int beatsPerMinute);
 private:
     void tick();
     LegionAura &m_keyboard;
@@ -41,7 +40,6 @@ private:
     MusicMeter m_meter;
     QElapsedTimer m_audioAge;
     QString m_audioError;
-    int m_lastBeatRate = -1;
     bool m_running = false, m_stopping = true;
     int m_brightness = 2;
     quint64 m_generation = 0;
