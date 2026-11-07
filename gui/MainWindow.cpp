@@ -136,7 +136,15 @@ MainWindow::MainWindow(QWidget *parent)
     connect(&m_musicSync, &MusicSync::colorsChanged, this, [this] {
         for (int i = 0; i < 4; ++i) ui->keyboardPreviewWidget->setZoneColor(i, m_musicSync.colors()[i]);
     });
-    connect(&m_musicSync, &MusicSync::failed, this, &MainWindow::setStatusErr);
+    connect(&m_musicSync, &MusicSync::failed, this, [this](const QString &message) {
+        ui->lblMusicBeatRate->setText("Beat rate: stopped");
+        setStatusErr(message);
+    });
+    connect(&m_musicSync, &MusicSync::beatRateChanged, this, [this](int rate) {
+        ui->lblMusicBeatRate->setText(rate > 0
+            ? QString("Beat rate: ~%1/min — one color change per beat").arg(rate)
+            : "Beat rate: detecting…");
+    });
     connect(&m_musicSync, &MusicSync::started, this, [this] {
         setStatusOk("Music Sync: volume fills left to right; colors follow detected beats.");
     });
@@ -364,6 +372,8 @@ void MainWindow::onEffectChanged(int idx)
     m_screenSync.stop();
     m_musicSync.stop();
     ui->sliderSpeed->setEnabled(idx != 5 && idx != 6);
+    ui->lblMusicBeatRate->setVisible(idx == 6);
+    ui->lblMusicBeatRate->setText("Beat rate: detecting…");
     QString mode;
     switch (idx) {
         case 0: mode = "static"; break;
@@ -622,6 +632,7 @@ void MainWindow::onOffClicked()
 {
     m_screenSync.stop();
     m_musicSync.stop();
+    ui->lblMusicBeatRate->setText("Beat rate: stopped");
     if (!deviceReady_) {
         setStatusErr("Device not connected.");
         return;

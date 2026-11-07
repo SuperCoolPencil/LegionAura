@@ -44,6 +44,7 @@ void MusicSync::start(int brightness, const std::array<LAColor, 4> &colors)
     m_meter = MusicMeter{};
     m_current.fill(Qt::black);
     m_audioError.clear();
+    m_lastBeatRate = -1;
     m_running = true;
     m_stopping = false;
     const auto generation = ++m_generation;
@@ -110,6 +111,11 @@ void MusicSync::tick()
     if (m_audioAge.elapsed() > 100) m_meter.silence();
     m_meter.advance(seconds);
     const auto levels = m_meter.levels();
+    const int beatRate = qRound(m_meter.beatRate());
+    if (beatRate != m_lastBeatRate) {
+        m_lastBeatRate = beatRate;
+        emit beatRateChanged(beatRate);
+    }
     LAParams params{LAEffect::Static, 1, static_cast<uint8_t>(m_brightness), {}, LAWaveDir::None};
     for (int i = 0; i < 4; ++i) {
         const QColor base(m_colors[i].r, m_colors[i].g, m_colors[i].b);
