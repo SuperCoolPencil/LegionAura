@@ -20,6 +20,7 @@ add_executable(legionaura-gui
     MainWindow.cpp
     MusicSync.cpp
     MusicSync.h
+    MusicMeter.h
     ScreenSync.cpp
     ScreenSync.h
     ScreenColors.h

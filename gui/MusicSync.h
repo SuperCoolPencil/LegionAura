@@ -1,5 +1,6 @@
 #pragma once
 #include "legionaura.h"
+#include "MusicMeter.h"
 #include <QObject>
 #include <QColor>
 #include <QProcess>
@@ -23,6 +24,7 @@ public:
 signals:
     void colorsChanged();
     void failed(const QString &message);
+    void started();
 private:
     void tick();
     LegionAura &m_keyboard;
@@ -35,10 +37,10 @@ private:
     std::optional<LAParams> m_pending;
     std::array<LAColor, 4> m_colors{};
     std::array<QColor, 4> m_current{};
-    QByteArray m_audioBytes;
+    MusicMeter m_meter;
+    QElapsedTimer m_audioAge;
+    QString m_audioError;
     bool m_running = false, m_stopping = true;
     int m_brightness = 2;
     quint64 m_generation = 0;
-    std::array<double, 4> m_levels{}, m_averages{}, m_envelopes{};
-    std::array<double, 3> m_filters{};
 };

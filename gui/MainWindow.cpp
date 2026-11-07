@@ -137,6 +137,9 @@ MainWindow::MainWindow(QWidget *parent)
         for (int i = 0; i < 4; ++i) ui->keyboardPreviewWidget->setZoneColor(i, m_musicSync.colors()[i]);
     });
     connect(&m_musicSync, &MusicSync::failed, this, &MainWindow::setStatusErr);
+    connect(&m_musicSync, &MusicSync::started, this, [this] {
+        setStatusOk("Music Sync: volume fills left to right; colors follow detected beats.");
+    });
     connect(&m_screenSync, &ScreenSync::colorsChanged, this, [this] {
         const auto colors = m_screenSync.colors();
         for (int i = 0; i < 4; ++i)
@@ -360,14 +363,6 @@ void MainWindow::onEffectChanged(int idx)
 {
     m_screenSync.stop();
     m_musicSync.stop();
-    if (idx == 6 && ui->editZ1->text() == "8A2BE2" &&
-        ui->editZ2->text() == "8A2BE2" && ui->editZ3->text() == "8A2BE2" &&
-        ui->editZ4->text() == "8A2BE2") {
-        ui->editZ1->setText("8A2BE2");
-        ui->editZ2->setText("B52BE2");
-        ui->editZ3->setText("E22BAE");
-        ui->editZ4->setText("FF507C");
-    }
     ui->sliderSpeed->setEnabled(idx != 5 && idx != 6);
     QString mode;
     switch (idx) {
@@ -598,6 +593,7 @@ void MainWindow::onApplyClicked()
         return;
     }
     if (idx == 5) {
+        m_musicSync.stop();
         setStatusOk("Screen Sync: choose a screen if prompted. Keep the app open to sync.");
         m_screenSync.start(ui->sliderBrightness->value());
         return;
