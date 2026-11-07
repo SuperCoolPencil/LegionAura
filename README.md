@@ -13,7 +13,7 @@ LegionAura communicates with the built-in 4-zone ITE RGB keyboard controller via
 ## Features
 
 - **Dual Interface:** Comes with both a command-line utility (`legionaura`) and a clean graphical interface (`legionaura-gui`).
-- **Music Sync:** Show playback volume on a four-zone level meter, with beat-driven color changes.
+- **Music Sync:** Pulse all four keyboard zones to the beat of system audio.
 - **Screen Sync:** Smoothly mirror four screen regions onto the four keyboard zones while the GUI is running.
 - **Hardware-Level Control:** Interfaces directly with the ITE controller using `hidapi`.
 - **Lightweight:** Built natively in C++ and Qt6 for near-zero memory footprint.
@@ -95,9 +95,9 @@ The GUI defaults to maximum hardware brightness. Reactive effects process incomi
 
 ### Music Sync
 
-Select **Music Sync**, choose your starting zone colors, and press **Apply**. Overall playback volume fills the four zones from left to right: quiet passages light fewer zones, loud passages fill all four, and silence fades to black. Detected beat onsets rotate the palette, so faster beats produce faster color changes. This is a simple onset detector, not a BPM estimator. The meter uses a logarithmic level scale with fast attacks and smooth release; saturated starting colors make the beat-driven hue changes most visible. The brightness slider remains available. The GUI must remain running; switching effects, pressing Off, reconnecting, or closing it stops capture. Music Sync does not overwrite the saved lighting profile.
+Select **Music Sync**, choose up to four zone colors, and press **Apply**. The four zones react independently to bass, low mids, upper mids, and treble, with fast attacks and smooth fades. The initial music palette runs from violet to pink. The brightness slider remains available. The GUI must remain running; switching effects, pressing Off, reconnecting, or closing it stops capture. Music Sync does not overwrite the saved lighting profile.
 
-Music Sync captures stereo playback from the default output's monitor through `parec`, rather than the microphone. Install the PulseAudio utilities package (often `pulseaudio-utils` or `pulseaudio`) and run PulseAudio or PipeWire's PulseAudio compatibility service. The output device is selected when Apply is pressed; press Apply again after changing the default output. Audio is processed in fixed 10 ms windows locally and is not saved. If the monitor suspends or stops delivering samples, the meter fades to black. If capture or a keyboard write fails, the status bar reports the error.
+Music Sync captures the default output's monitor through `pactl` and `parec`. Install the PulseAudio utilities package (often `pulseaudio-utils` or `pulseaudio`) and run PulseAudio or PipeWire's PulseAudio compatibility service. The output device is selected when Apply is pressed; press Apply again after changing the default output. Audio is processed locally and not saved. If capture or a keyboard write fails, the status bar reports the error.
 
 ### GNOME Wayland fullscreen capture
 
