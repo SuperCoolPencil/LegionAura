@@ -13,7 +13,7 @@ LegionAura communicates with the built-in 4-zone ITE RGB keyboard controller via
 ## Features
 
 - **Dual Interface:** Comes with both a command-line utility (`legionaura`) and a clean graphical interface (`legionaura-gui`).
-- **Music Sync:** Pulse all four keyboard zones to the beat of system audio.
+- **Music Sync:** Mirror Now Playing Card’s ribbon animation and artwork gradient across four keyboard zones.
 - **Screen Sync:** Smoothly mirror four screen regions onto the four keyboard zones while the GUI is running.
 - **Hardware-Level Control:** Interfaces directly with the ITE controller using `hidapi`.
 - **Lightweight:** Built natively in C++ and Qt6 for near-zero memory footprint.
@@ -95,9 +95,23 @@ The GUI defaults to maximum hardware brightness. Reactive effects process incomi
 
 ### Music Sync
 
-Select **Music Sync**, choose up to four zone colors, and press **Apply**. The four zones react independently to bass, low mids, upper mids, and treble, with fast attacks and smooth fades. The initial music palette runs from violet to pink. The brightness slider remains available. The GUI must remain running; switching effects, pressing Off, reconnecting, or closing it stops capture. Music Sync does not overwrite the saved lighting profile.
+Enable the customized [Now Playing Card](https://github.com/SuperCoolPencil/nowplaying-card)
+GNOME extension, turn on its spectrum and select the **Ribbon** shape. In LegionAura,
+select **Music Sync** and press **Apply**. The four keyboard zones sample the ribbon
+from left to right, sharing its current thumbnail gradient, animation phase and
+sound-driven shape. The keyboard has four zones, so this is a four-region rendering
+of the ribbon rather than a pixel display.
 
-Music Sync captures the default output's monitor through `pactl` and `parec`. Install the PulseAudio utilities package (often `pulseaudio-utils` or `pulseaudio`) and run PulseAudio or PipeWire's PulseAudio compatibility service. The output device is selected when Apply is pressed; press Apply again after changing the default output. Audio is processed locally and not saved. If capture or a keyboard write fails, the status bar reports the error.
+The brightness slider remains available; manual zone colors are disabled in this
+mode. Keep both the extension and GUI running. Pausing, hiding the ribbon, or
+switching to another shape makes the keyboard dark. If frames stop arriving, the
+keyboard goes dark within one second and reconnects when the extension returns.
+Switching effects, pressing Off, reconnecting, or closing the GUI stops Music Sync.
+Music Sync does not overwrite the saved lighting profile.
+
+Frames travel locally over the session bus; LegionAura no longer captures audio
+separately. The extension handles audio analysis and artwork fetching. Qt DBus
+is required to build the GUI (included in `qt6-base-dev` on Ubuntu).
 
 ### GNOME Wayland fullscreen capture
 
@@ -105,7 +119,7 @@ Some Mutter versions stop delivering CPU-memory capture frames when fullscreen c
 
 ### Development checks
 
-After building, run `ctest --test-dir build --output-on-failure` for synthetic color sampling and smoothing checks. For integration testing with a supported keyboard:
+After building, run `ctest --test-dir build --output-on-failure` for synthetic color sampling, smoothing and ribbon-frame validation checks. For integration testing with a supported keyboard:
 
 - Display four distinct vertical color bands and confirm left-to-right mapping and the live preview.
 - Change to black and bright content; check smooth transitions and brightness adjustment.

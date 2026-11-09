@@ -1,77 +1,36 @@
 #include "MusicSync.h"
+#include "RibbonFrame.h"
+#include <QDBusConnection>
+#include <QDBusMessage>
+#include <QDBusPendingCallWatcher>
+#include <QDBusPendingReply>
+#include <QDBusServiceWatcher>
 #include <QMetaObject>
-#include <algorithm>
-#include <cmath>
-#include <cstring>
+
+namespace {
+const QString service = "org.gnome.Shell.Extensions.NowPlayingCard";
+const QString path = "/org/gnome/Shell/Extensions/NowPlayingCard";
+}
 
 MusicSync::MusicSync(LegionAura &keyboard, QObject *parent) : QObject(parent), m_keyboard(keyboard)
 {
-    // Fallback for fades during silence; incoming audio updates immediately.
-    m_timer.setInterval(16);
+    m_timer.setInterval(50);
     connect(&m_timer, &QTimer::timeout, this, &MusicSync::tick);
-    connect(&m_audio, &QProcess::readyReadStandardOutput, this, [this] {
-        m_audioBytes += m_audio.readAllStandardOutput();
-        const QByteArray data = m_audioBytes.left(m_audioBytes.size() & ~qsizetype(1));
-        m_audioBytes.remove(0, data.size());
-        std::array<double, 4> sums{};
-        int count = 0;
-        for (qsizetype i = 0; i + 1 < data.size(); i += 2) {
-            const auto lo = static_cast<unsigned char>(data[i]);
-            const auto hi = static_cast<unsigned char>(data[i + 1]);
-            const auto sample = static_cast<qint16>(static_cast<quint16>(lo | (hi << 8)));
-            const double input = sample / 32768.0;
-            // Nested low-pass filters split audio into four complementary bands.
-            constexpr double cutoffs[] = {180.0, 700.0, 3000.0};
-            for (int band = 0; band < 3; ++band) {
-                const double alpha = 1.0 - std::exp(-2.0 * 3.141592653589793 * cutoffs[band] / 44100.0);
-                m_filters[band] += alpha * (input - m_filters[band]);
-            }
-            const double bands[] = {m_filters[0], m_filters[1] - m_filters[0],
-                                    m_filters[2] - m_filters[1], input - m_filters[2]};
-            for (int band = 0; band < 4; ++band) sums[band] += bands[band] * bands[band];
-            ++count;
-        }
-        if (count)
-            for (int band = 0; band < 4; ++band)
-                m_levels[band] = std::max(m_levels[band], std::sqrt(sums[band] / count));
-        if (count && m_running) tick();
-    });
-    connect(&m_audio, &QProcess::errorOccurred, this, [this](QProcess::ProcessError) {
-        if (!m_running) return;
-        stop();
-        emit failed("Music Sync: audio capture failed. Install PulseAudio utilities and check your audio service.");
-    });
-    connect(&m_audio, qOverload<int, QProcess::ExitStatus>(&QProcess::finished), this,
-            [this](int, QProcess::ExitStatus) {
-        if (!m_running) return;
-        stop();
-        emit failed("Music Sync: audio capture stopped. Check your audio output and press Apply to retry.");
-    });
+    QDBusConnection::sessionBus().connect(service, path, service, "Frame", this,
+                                        SLOT(onRibbonFrame(QString)));
+    auto *watcher = new QDBusServiceWatcher(service, QDBusConnection::sessionBus(),
+                                          QDBusServiceWatcher::WatchForRegistration, this);
+    connect(watcher, &QDBusServiceWatcher::serviceRegistered, this, [this] { requestFrame(); });
 }
+
 MusicSync::~MusicSync() { stop(); }
 
-void MusicSync::start(int brightness, const std::array<LAColor, 4> &colors)
+void MusicSync::start(int brightness)
 {
     stop();
-    // PulseAudio and pipewire-pulse expose the default output's monitor as this source.
-    QProcess query;
-    query.start("pactl", {"get-default-sink"});
-    if (!query.waitForFinished(3000) || query.exitCode() != 0) {
-        emit failed("Music Sync: could not find the default audio output. Install pactl and check your audio service.");
-        return;
-    }
-    const QString sink = QString::fromUtf8(query.readAllStandardOutput()).trimmed();
-    if (sink.isEmpty()) {
-        emit failed("Music Sync: no default audio output found.");
-        return;
-    }
     m_brightness = brightness;
-    m_colors = colors;
-    m_levels.fill(0);
-    m_averages.fill(0);
-    m_envelopes.fill(0);
-    m_filters.fill(0);
-    m_audioBytes.clear();
+    m_target.fill(QColor(Qt::black));
+    m_current.fill(QColor(Qt::black));
     m_running = true;
     m_stopping = false;
     const auto generation = ++m_generation;
@@ -101,10 +60,35 @@ void MusicSync::start(int brightness, const std::array<LAColor, 4> &colors)
             previous = params;
         }
     });
-    m_audio.setProcessChannelMode(QProcess::SeparateChannels);
-    m_audio.start("parec", {"--device=" + sink + ".monitor", "--format=s16le", "--rate=44100", "--channels=1", "--latency-msec=1"});
-    m_elapsed.start();
+    m_elapsed.invalidate();
     m_timer.start();
+    tick();
+    emit colorsChanged();
+    requestFrame();
+}
+
+void MusicSync::requestFrame()
+{
+    if (!m_running) return;
+    const auto generation = m_generation;
+    const auto message = QDBusMessage::createMethodCall(service, path, service, "GetFrame");
+    auto *call = new QDBusPendingCallWatcher(QDBusConnection::sessionBus().asyncCall(message, 1000), this);
+    connect(call, &QDBusPendingCallWatcher::finished, this, [this, generation](QDBusPendingCallWatcher *finished) {
+        const QDBusPendingReply<QString> reply = *finished;
+        finished->deleteLater();
+        if (!m_running || generation != m_generation || reply.isError()) return;
+        onRibbonFrame(reply.value());
+    });
+}
+
+void MusicSync::onRibbonFrame(const QString &json)
+{
+    if (!m_running) return;
+    const auto colors = decodeRibbonFrame(json);
+    if (!colors) return;
+    m_target = *colors;
+    m_elapsed.start();
+    tick();
 }
 
 void MusicSync::stop()
@@ -112,10 +96,6 @@ void MusicSync::stop()
     m_running = false;
     ++m_generation;
     m_timer.stop();
-    if (m_audio.state() != QProcess::NotRunning) {
-        m_audio.kill();
-        m_audio.waitForFinished(1000);
-    }
     {
         std::lock_guard<std::mutex> lock(m_mutex);
         m_stopping = true;
@@ -128,32 +108,21 @@ void MusicSync::stop()
 void MusicSync::tick()
 {
     if (!m_running) return;
-    const double steps = std::max(0.001, m_elapsed.nsecsElapsed() / 25000000.0);
-    m_elapsed.restart();
-    // Fast attack, slow release: each band breathes independently without flicker.
-    for (int i = 0; i < 4; ++i) {
-        const double retain = std::pow(0.98, steps);
-        m_averages[i] = retain * m_averages[i] + (1.0 - retain) * m_levels[i];
-        const double relative = m_levels[i] / std::max(0.012, m_averages[i] * 2.2);
-        const double gate = std::clamp(m_levels[i] / 0.008, 0.0, 1.0);
-        const double target = std::clamp(relative, 0.0, 1.0) * gate;
-        const double blend = 1.0 - std::pow(target > m_envelopes[i] ? 0.25 : 0.88, steps);
-        m_envelopes[i] += blend * (target - m_envelopes[i]);
-        m_levels[i] = 0;
-    }
+    // A missing/stopped extension must never leave old lighting stuck on.
+    auto colors = m_target;
+    if (!m_elapsed.isValid() || m_elapsed.elapsed() > 1000)
+        colors.fill(QColor(Qt::black));
     LAParams params{LAEffect::Static, 1, static_cast<uint8_t>(m_brightness), {}, LAWaveDir::None};
-    for (int i = 0; i < 4; ++i) {
-        const double intensity = 0.04 + 0.96 * m_envelopes[i];
-        params.zones[i] = {static_cast<uint8_t>(m_colors[i].r * intensity),
-                           static_cast<uint8_t>(m_colors[i].g * intensity),
-                           static_cast<uint8_t>(m_colors[i].b * intensity)};
-    }
     for (int i = 0; i < 4; ++i)
-        m_current[i] = QColor(params.zones[i].r, params.zones[i].g, params.zones[i].b);
+        params.zones[i] = {static_cast<uint8_t>(colors[i].red()),
+                           static_cast<uint8_t>(colors[i].green()),
+                           static_cast<uint8_t>(colors[i].blue())};
+    const bool changed = colors != m_current;
+    m_current = colors;
     {
         std::lock_guard<std::mutex> lock(m_mutex);
         m_pending = params;
     }
     m_ready.notify_one();
-    emit colorsChanged();
+    if (changed) emit colorsChanged();
 }

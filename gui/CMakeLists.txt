@@ -4,7 +4,7 @@ set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTOUIC ON)
 set(CMAKE_AUTORCC ON)
 
-find_package(Qt6 6.5 REQUIRED COMPONENTS Widgets Multimedia)
+find_package(Qt6 6.5 REQUIRED COMPONENTS Widgets Multimedia DBus)
 find_package(Threads REQUIRED)
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(LIBUSB REQUIRED libusb-1.0)
@@ -53,6 +53,7 @@ add_executable(legionaura-gui
 target_link_libraries(legionaura-gui
     Qt6::Widgets
     Qt6::Multimedia
+    Qt6::DBus
     Threads::Threads
     ${LIBUSB_LIBRARIES}
     legionaura_lib

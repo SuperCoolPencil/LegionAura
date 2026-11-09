@@ -360,14 +360,6 @@ void MainWindow::onEffectChanged(int idx)
 {
     m_screenSync.stop();
     m_musicSync.stop();
-    if (idx == 6 && ui->editZ1->text() == "8A2BE2" &&
-        ui->editZ2->text() == "8A2BE2" && ui->editZ3->text() == "8A2BE2" &&
-        ui->editZ4->text() == "8A2BE2") {
-        ui->editZ1->setText("8A2BE2");
-        ui->editZ2->setText("B52BE2");
-        ui->editZ3->setText("E22BAE");
-        ui->editZ4->setText("FF507C");
-    }
     ui->sliderSpeed->setEnabled(idx != 5 && idx != 6);
     QString mode;
     switch (idx) {
@@ -381,7 +373,7 @@ void MainWindow::onEffectChanged(int idx)
         default: mode = "static"; break;
     }
 
-    bool needsColors = (mode == "static" || mode == "breath" || mode == "music");
+    bool needsColors = (mode == "static" || mode == "breath");
     bool needsDir    = (mode == "wave");
 
     // Show the accent toggle for both Static and Breath modes
@@ -426,7 +418,7 @@ void MainWindow::updatePreview()
         default: mode = "static"; break;
     }
     bool needsColors = (mode == "static" || mode == "breath" || mode == "music");
-    if (mode == "screen") return;
+    if (mode == "screen" || mode == "music") return;
 
     if (!needsColors) {
         for (int i=0; i<4; i++) ui->keyboardPreviewWidget->setZoneColor(i, QColor(0,0,0));
@@ -591,10 +583,9 @@ void MainWindow::onApplyClicked()
     }
 
     if (idx == 6) {
-        auto params = buildParamsFromUi();
-        if (!params) { setStatusErr("Invalid zone colors for Music Sync."); return; }
         m_screenSync.stop();
-        m_musicSync.start(ui->sliderBrightness->value(), params->zones);
+        setStatusOk("Music Sync: select Ribbon in Now Playing Card and play media. Keep both running.");
+        m_musicSync.start(ui->sliderBrightness->value());
         return;
     }
     if (idx == 5) {
